@@ -611,10 +611,12 @@
         <div class="bar" id="bar">
           <input type="search" id="q" placeholder="جستجو در ردیف‌ها..." />
           <button class="btn p" id="add">+ ردیف جدید</button>
+          <button class="btn p" id="openf">باز کردن فایل</button>
           <button class="btn p" id="savef">ذخیره فایل</button>
           <button class="btn" id="prt">پرینت</button>
           <button class="btn" id="exp" hidden></button>
           <button class="btn" id="impb" hidden></button>
+          <input type="file" id="imp" accept=".xlsx,.xls" hidden />
           <input type="file" id="pf" hidden />
           <button class="btn" id="rst" hidden>بازنشانی</button>
           <span class="cnt" id="cnt"></span
@@ -2007,7 +2009,8 @@ const ORIG = (fix(D.files), JSON.stringify(D.files)),
         });
       }
       const H = {};
-      async function doImport(f, ix, quiet = false) {
+      $("#impb").onclick = () => $("#imp").click();
+      async function doImport(f, ix) {
         try {
           ix = ix == null ? S.f : ix;
           const wb = XLSX.read(await f.arrayBuffer(), {
@@ -2119,16 +2122,45 @@ const ORIG = (fix(D.files), JSON.stringify(D.files)),
           });
           if (k) F.dataTs = Date.now();
           persist(0);
-          if (!quiet) {
-            render();
-            toast(k ? "فایل بارگذاری شد" : "شیتی با نام مشابه پیدا نشد");
-          }
+          render();
+          toast(k ? "فایل بارگذاری شد" : "شیتی با نام مشابه پیدا نشد");
           return k > 0;
         } catch (err) {
-          if (!quiet) toast("خواندن فایل ناموفق بود");
+          toast("خواندن فایل ناموفق بود");
           return false;
         }
       }
+      $("#imp").onchange = async (e) => {
+        const f = e.target.files[0];
+        if (f) await doImport(f);
+        e.target.value = "";
+      };
+      $("#openf").onclick = async () => {
+        try {
+          const [h] = await window.showOpenFilePicker({
+            types: [
+              {
+                description: "Excel",
+                accept: {
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+                    [".xlsx"],
+                },
+              },
+            ],
+          });
+          try {
+            await h.requestPermission({ mode: "readwrite" });
+          } catch (e) {}
+          if (await doImport(await h.getFile())) {
+            H[S.f] = h;
+            fileSaveFailed = false;
+            hSet(S.f, h).catch(() => {});
+            refreshSaveStatus();
+          }
+        } catch (e) {
+          if (!e || e.name !== "AbortError") $("#imp").click();
+        }
+      };
       $("#savef").onclick = async () => {
         const h = H[S.f];
         if (!h) {
@@ -2429,33 +2461,7 @@ const ORIG = (fix(D.files), JSON.stringify(D.files)),
         if (e.key === "Escape") document.body.classList.remove("sbo");
       });
       render();
-      async function loadBundledWorkbooks() {
-        if (location.protocol !== "https:" && location.protocol !== "http:")
-          return;
-        try {
-          const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-          if (saved && Number(saved.ts || 0) > Number(D.ts || 0)) return;
-        } catch (e) {}
-        const sources = [
-          "قالب ها.xlsx",
-          "سنبه و ماتریس.xlsx",
-          "سنبه_های_قالب.xlsx",
-          "رنده.xlsx",
-        ];
-        let loaded = false;
-        for (let i = 0; i < Math.min(sources.length, D.files.length); i++) {
-          try {
-            const response = await fetch(new URL(sources[i], location.href));
-            if (!response.ok) continue;
-            if (await doImport(await response.blob(), i, true)) loaded = true;
-          } catch (e) {}
-        }
-        if (loaded) {
-          render();
-          scrollToLastRow();
-        }
-      }
-      loadBundledWorkbooks();
+      restore().then(scrollToLastRow);
     </script>
   </body>
 </html>
