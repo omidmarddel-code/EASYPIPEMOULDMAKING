@@ -2313,6 +2313,15 @@ const ORIG = (fix(D.files), JSON.stringify(D.files)),
           t.onerror = () => rej(t.error);
         });
       }
+      async function hDelete(k) {
+        const d = await idb();
+        return new Promise((res, rej) => {
+          const t = d.transaction("h", "readwrite");
+          t.objectStore("h").delete(k);
+          t.oncomplete = res;
+          t.onerror = () => rej(t.error);
+        });
+      }
       async function hAll() {
         const d = await idb();
         return new Promise((res, rej) => {
@@ -2364,6 +2373,10 @@ const ORIG = (fix(D.files), JSON.stringify(D.files)),
           } catch (e) {}
           if (p === "granted") await attach(k, h);
           else if (p === "prompt") pend.push([k, h]);
+        }
+        if (all.app && all.app.name !== "index.html") {
+          await hDelete("app");
+          delete all.app;
         }
         if (all.app) {
           let p = "denied";
